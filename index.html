@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Space Invaders Arcade</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+
+    body {
+      background-color: #050508;
+      color: #ffffff;
+      font-family: 'Courier New', Courier, monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+      padding-top: max(8px, env(safe-area-inset-top));
+      /* Spazio di sicurezza inferiore aumentato per evitare i pulsanti di sistema */
+      padding-bottom: max(50px, env(safe-area-inset-bottom));
+    }
+
+    #header {
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 16px;
+      font-size: 13px;
+      font-weight: bold;
+      letter-spacing: 1px;
+    }
+
+    .score-val { color: #00ffcc; }
+    .high-val { color: #ffcc00; }
+    .lives-val { color: #00ff66; }
+
+    #game-container {
+      position: relative;
+      width: 100%;
+      max-width: 480px;
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    canvas {
+      background: #000000;
+      border: 2px solid #223;
+      border-radius: 8px;
+      box-shadow: 0 0 15px rgba(0, 255, 204, 0.15);
+      width: 100%;
+      max-height: 100%;
+      aspect-ratio: 3 / 4;
+      object-fit: contain;
+    }
+
+    /* Controlli Mobile rialzati e ingranditi */
+    #controls {
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 16px;
+      gap: 12px;
+      margin-bottom: 20px; /* Margine extra dai pulsanti virtuali di Android */
+    }
+
+    .dpad {
+      display: flex;
+      gap: 12px;
+      flex: 1;
+    }
+
+    .btn {
+      background: linear-gradient(180deg, #2a2d3d 0%, #151821 100%);
+      border: 2px solid #444c66;
+      border-radius: 12px;
+      color: #fff;
+      font-weight: bold;
+      font-size: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      touch-action: none;
+      box-shadow: 0 4px 0 #0f1117;
+    }
+
+    .btn:active {
+      transform: translateY(2px);
+      box-shadow: 0 2px 0 #0f1117;
+    }
+
+    .btn-move {
+      height: 64px;
+      flex: 1;
+      font-size: 26px;
+    }
+
+    .btn-fire {
+      height: 64px;
+      width: 130px;
+      background: linear-gradient(180deg, #e63946 0%, #900c3f 100%);
+      border-color: #ff4d6d;
+      font-size: 18px;
+      letter-spacing: 1px;
+    }
+
+    .btn-pause {
+      height: 64px;
+      width: 50px;
+      font-size: 14px;
+      background: #2b2d42;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="header">
+    <div>SCORE<br><span id="score" class="score-val">00000</span></div>
+    <div>HIGH<br><span id="highscore" class="high-val">00000</span></div>
+    <div>LIVES<br><span id="lives" class="lives-val">3</span></div>
+  </div>
+
+  <div id="game-container">
+    <canvas id="canvas" width="360" height="480"></canvas>
+  </div>
+
+  <div id="controls">
+    <div class="dpad">
+      <button class="btn btn-move" id="btn-left">◄</button>
+      <button class="btn btn-move" id="btn-right">►</button>
+    </div>
+    <button class="btn btn-pause" id="btn-pause">❚❚</button>
+    <button class="btn btn-fire" id="btn-fire">FIRE</button>
+  </div>
+
+<script>
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+
+  const scoreEl = document.getElementById('score');
+  const highscoreEl = document.getElementById('highscore');
+  const livesEl = document.getElementById('lives');
+
+  let score = 0;
+  let highscore = localStorage.getItem('si_highscore') || 0;
+  let lives = 3;
+  let gameOver = false;
+  let gamePaused = false;
+  let gameStarted = false;
+
+  highscoreEl.innerText = String(highscore).padStart(5, '0');
+
+  const keys = { left: false, right: false, fire: false };
+
+  const player = {
+    x: canvas.width / 2 - 14,
+    y: canvas.height - 35,
+    width: 28,
+    height: 14,
+    speed: 3.5
+  };
+
+  let bullets = [];
+  let enemyBullets = [];
+
+  const alienRows = 4;
+  const alienCols = 8;
+  let aliens = [];
+  let alienDirection = 1;
+  let alienStepTimer = 0;
+  let alienStepInterval = 35;
+
+  function initAliens() {
+    aliens = [];
+    for (let r = 0; r < alienRows; r++) {
+      for (let c = 0; c < alienCols; c++) {
+        aliens.push({
+          x: 30 + c * 36,
+          y: 40 + r * 28,
+          width: 22,
+          height: 16,
+          type: r,
+          alive: true
+        });
+      }
+    }
+  }
+
+  initAliens();
+
+  function update() {
+    if (!gameStarted || gameOver || gamePaused) return;
+
+    if (keys.left && player.x > 10) player.x -= player.speed;
+    if (keys.right && player.x < canvas.width - player.width - 10) player.x += player.speed;
+
+    if (keys.fire) {
+      if (bullets.length === 0) {
+        bullets.push({ x: player.x + player.width / 2 - 1.5, y: player.y, width: 3, height: 8, speed: 6 });
+      }
+      keys.fire = false;
+    }
+
+    bullets.forEach((b, index) => {
+      b.y -= b.speed;
+      if (b.y < 0) bullets.splice(index, 1);
+    });
+
+    enemyBullets.forEach((eb, index) => {
+      eb.y += eb.speed;
+      if (eb.y > canvas.height) enemyBullets.splice(index, 1);
+
+      if (
+        eb.x < player.x + player.width &&
+        eb.x + eb.width > player.x &&
+        eb.y < player.y + player.height &&
+        eb.y + eb.height > player.y
+      ) {
+        enemyBullets.splice(index, 1);
+        lives--;
+        livesEl.innerText = lives;
+        if (lives <= 0) gameOver = true;
+      }
+    });
+
+    alienStepTimer++;
+    if (alienStepTimer >= alienStepInterval) {
+      alienStepTimer = 0;
+      let shiftDown = false;
+
+      aliens.forEach(a => {
+        if (!a.alive) return;
+        if ((alienDirection === 1 && a.x + a.width >= canvas.width - 15) ||
+            (alienDirection === -1 && a.x <= 15)) {
+          shiftDown = true;
+        }
+      });
+
+      if (shiftDown) {
+        alienDirection *= -1;
+        aliens.forEach(a => { a.y += 10; });
+      } else {
+        aliens.forEach(a => { a.x += alienDirection * 8; });
+      }
+
+      const livingAliens = aliens.filter(a => a.alive);
+      if (livingAliens.length > 0 && Math.random() < 0.25) {
+        const shooter = livingAliens[Math.floor(Math.random() * livingAliens.length)];
+        enemyBullets.push({ x: shooter.x + shooter.width / 2, y: shooter.y + shooter.height, width: 3, height: 7, speed: 3 });
+      }
+    }
+
+    bullets.forEach((b, bIdx) => {
+      aliens.forEach(a => {
+        if (a.alive && b.x < a.x + a.width && b.x + b.width > a.x && b.y < a.y + a.height && b.y + b.height > a.y) {
+          a.alive = false;
+          bullets.splice(bIdx, 1);
+          score += 10;
+          scoreEl.innerText = String(score).padStart(5, '0');
+          if (score > highscore) {
+            highscore = score;
+            highscoreEl.innerText = String(highscore).padStart(5, '0');
+            localStorage.setItem('si_highscore', highscore);
+          }
+        }
+      });
+    });
+  }
+
+  function render() {
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (!gameStarted) {
+      ctx.fillStyle = '#00ffcc';
+      ctx.font = '16px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText('PREMI FIRE O SPAZIO', canvas.width / 2, canvas.height / 2 - 10);
+      ctx.fillText('PER INIZIARE', canvas.width / 2, canvas.height / 2 + 15);
+      return;
+    }
+
+    // Navicella giocatore verde
+    ctx.fillStyle = '#00ff66';
+    ctx.fillRect(player.x, player.y, player.width, player.height);
+    ctx.fillRect(player.x + 11, player.y - 5, 6, 5);
+
+    // Linea di difesa rossa
+    ctx.fillStyle = '#ff0055';
+    ctx.fillRect(0, canvas.height - 15, canvas.width, 1);
+
+    aliens.forEach(a => {
+      if (a.alive) {
+        ctx.fillStyle = a.type === 0 ? '#ff0055' : a.type === 1 ? '#00ccff' : '#ffcc00';
+        ctx.fillRect(a.x, a.y, a.width, a.height);
+      }
+    });
+
+    ctx.fillStyle = '#ffffff';
+    bullets.forEach(b => ctx.fillRect(b.x, b.y, b.width, b.height));
+
+    ctx.fillStyle = '#ff3300';
+    enemyBullets.forEach(eb => ctx.fillRect(eb.x, eb.y, eb.width, eb.height));
+
+    if (gameOver) {
+      ctx.fillStyle = 'rgba(0,0,0,0.8)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#ff0055';
+      ctx.font = '20px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2);
+    }
+  }
+
+  function loop() {
+    update();
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  window.addEventListener('keydown', e => {
+    if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = true;
+    if (e.key === 'ArrowRight' || e.key === 'd') keys.right = true;
+    if (e.key === ' ' || e.key === 'Enter') {
+      if (!gameStarted) gameStarted = true;
+      keys.fire = true;
+    }
+  });
+
+  window.addEventListener('keyup', e => {
+    if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = false;
+    if (e.key === 'ArrowRight' || e.key === 'd') keys.right = false;
+  });
+
+  const bindTouch = (id, onPress, onRelease) => {
+    const el = document.getElementById(id);
+    el.addEventListener('touchstart', e => { e.preventDefault(); onPress(); });
+    el.addEventListener('touchend', e => { e.preventDefault(); if (onRelease) onRelease(); });
+    el.addEventListener('mousedown', e => { onPress(); });
+    el.addEventListener('mouseup', e => { if (onRelease) onRelease(); });
+  };
+
+  bindTouch('btn-left', () => keys.left = true, () => keys.left = false);
+  bindTouch('btn-right', () => keys.right = true, () => keys.right = false);
+  bindTouch('btn-fire', () => {
+    if (!gameStarted) gameStarted = true;
+    keys.fire = true;
+  });
+  bindTouch('btn-pause', () => { gamePaused = !gamePaused; });
+
+  loop();
+</script>
+</body>
+</html>
