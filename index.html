@@ -26,8 +26,7 @@
       height: 100dvh;
       overflow: hidden;
       padding-top: max(8px, env(safe-area-inset-top));
-      /* Spazio di sicurezza inferiore aumentato per evitare i pulsanti di sistema */
-      padding-bottom: max(50px, env(safe-area-inset-bottom));
+      padding-bottom: max(28px, env(safe-area-inset-bottom));
     }
 
     #header {
@@ -66,60 +65,59 @@
       object-fit: contain;
     }
 
-    /* Controlli Mobile rialzati e ingranditi */
+    /* Controlli Mobile */
     #controls {
       width: 100%;
       max-width: 480px;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 10px 16px;
+      padding: 12px 16px 8px 16px;
       gap: 12px;
-      margin-bottom: 20px; /* Margine extra dai pulsanti virtuali di Android */
+      margin-bottom: 8px;
     }
 
     .dpad {
       display: flex;
-      gap: 12px;
+      gap: 10px;
       flex: 1;
     }
 
     .btn {
       background: linear-gradient(180deg, #2a2d3d 0%, #151821 100%);
       border: 2px solid #444c66;
-      border-radius: 12px;
+      border-radius: 10px;
       color: #fff;
       font-weight: bold;
-      font-size: 20px;
+      font-size: 18px;
       display: flex;
       justify-content: center;
       align-items: center;
       touch-action: none;
       box-shadow: 0 4px 0 #0f1117;
-    }
-
-    .btn:active {
-      transform: translateY(2px);
-      box-shadow: 0 2px 0 #0f1117;
+      active {
+        transform: translateY(2px);
+        box-shadow: 0 2px 0 #0f1117;
+      }
     }
 
     .btn-move {
-      height: 64px;
+      height: 58px;
       flex: 1;
-      font-size: 26px;
+      font-size: 22px;
     }
 
     .btn-fire {
-      height: 64px;
-      width: 130px;
+      height: 58px;
+      width: 120px;
       background: linear-gradient(180deg, #e63946 0%, #900c3f 100%);
       border-color: #ff4d6d;
-      font-size: 18px;
+      font-size: 16px;
       letter-spacing: 1px;
     }
 
     .btn-pause {
-      height: 64px;
+      height: 58px;
       width: 50px;
       font-size: 14px;
       background: #2b2d42;
@@ -155,6 +153,7 @@
   const highscoreEl = document.getElementById('highscore');
   const livesEl = document.getElementById('lives');
 
+  // Stato di Gioco
   let score = 0;
   let highscore = localStorage.getItem('si_highscore') || 0;
   let lives = 3;
@@ -164,25 +163,30 @@
 
   highscoreEl.innerText = String(highscore).padStart(5, '0');
 
+  // Input
   const keys = { left: false, right: false, fire: false };
 
+  // Giocatore
   const player = {
-    x: canvas.width / 2 - 14,
-    y: canvas.height - 35,
-    width: 28,
-    height: 14,
-    speed: 3.5
+    x: canvas.width / 2 - 12,
+    y: canvas.height - 30,
+    width: 24,
+    height: 12,
+    speed: 3,
+    alive: true
   };
 
+  // Proiettili
   let bullets = [];
   let enemyBullets = [];
 
+  // Alieni
   const alienRows = 4;
   const alienCols = 8;
   let aliens = [];
   let alienDirection = 1;
   let alienStepTimer = 0;
-  let alienStepInterval = 35;
+  let alienStepInterval = 40;
 
   function initAliens() {
     aliens = [];
@@ -191,8 +195,8 @@
         aliens.push({
           x: 30 + c * 36,
           y: 40 + r * 28,
-          width: 22,
-          height: 16,
+          width: 20,
+          height: 14,
           type: r,
           alive: true
         });
@@ -202,28 +206,34 @@
 
   initAliens();
 
+  // Ciclo Principale
   function update() {
     if (!gameStarted || gameOver || gamePaused) return;
 
+    // Movimento Giocatore
     if (keys.left && player.x > 10) player.x -= player.speed;
     if (keys.right && player.x < canvas.width - player.width - 10) player.x += player.speed;
 
+    // Sparo Giocatore
     if (keys.fire) {
       if (bullets.length === 0) {
-        bullets.push({ x: player.x + player.width / 2 - 1.5, y: player.y, width: 3, height: 8, speed: 6 });
+        bullets.push({ x: player.x + player.width / 2 - 1.5, y: player.y, width: 3, height: 8, speed: 5 });
       }
       keys.fire = false;
     }
 
+    // Aggiornamento Proiettili Giocatore
     bullets.forEach((b, index) => {
       b.y -= b.speed;
       if (b.y < 0) bullets.splice(index, 1);
     });
 
+    // Aggiornamento Proiettili Alieni
     enemyBullets.forEach((eb, index) => {
       eb.y += eb.speed;
       if (eb.y > canvas.height) enemyBullets.splice(index, 1);
 
+      // Impatto col giocatore
       if (
         eb.x < player.x + player.width &&
         eb.x + eb.width > player.x &&
@@ -233,10 +243,13 @@
         enemyBullets.splice(index, 1);
         lives--;
         livesEl.innerText = lives;
-        if (lives <= 0) gameOver = true;
+        if (lives <= 0) {
+          gameOver = true;
+        }
       }
     });
 
+    // Movimento Alieni
     alienStepTimer++;
     if (alienStepTimer >= alienStepInterval) {
       alienStepTimer = 0;
@@ -257,13 +270,15 @@
         aliens.forEach(a => { a.x += alienDirection * 8; });
       }
 
+      // Sparo Casuale Alieni
       const livingAliens = aliens.filter(a => a.alive);
-      if (livingAliens.length > 0 && Math.random() < 0.25) {
+      if (livingAliens.length > 0 && Math.random() < 0.3) {
         const shooter = livingAliens[Math.floor(Math.random() * livingAliens.length)];
         enemyBullets.push({ x: shooter.x + shooter.width / 2, y: shooter.y + shooter.height, width: 3, height: 7, speed: 3 });
       }
     }
 
+    // Collisioni Proiettile - Alieno
     bullets.forEach((b, bIdx) => {
       aliens.forEach(a => {
         if (a.alive && b.x < a.x + a.width && b.x + b.width > a.x && b.y < a.y + a.height && b.y + b.height > a.y) {
@@ -294,15 +309,12 @@
       return;
     }
 
-    // Navicella giocatore verde
+    // Disegna Giocatore
     ctx.fillStyle = '#00ff66';
     ctx.fillRect(player.x, player.y, player.width, player.height);
-    ctx.fillRect(player.x + 11, player.y - 5, 6, 5);
+    ctx.fillRect(player.x + 9, player.y - 4, 6, 4);
 
-    // Linea di difesa rossa
-    ctx.fillStyle = '#ff0055';
-    ctx.fillRect(0, canvas.height - 15, canvas.width, 1);
-
+    // Disegna Alieni
     aliens.forEach(a => {
       if (a.alive) {
         ctx.fillStyle = a.type === 0 ? '#ff0055' : a.type === 1 ? '#00ccff' : '#ffcc00';
@@ -310,14 +322,16 @@
       }
     });
 
+    // Disegna Proiettili
     ctx.fillStyle = '#ffffff';
     bullets.forEach(b => ctx.fillRect(b.x, b.y, b.width, b.height));
 
     ctx.fillStyle = '#ff3300';
     enemyBullets.forEach(eb => ctx.fillRect(eb.x, eb.y, eb.width, eb.height));
 
+    // Schermata Game Over
     if (gameOver) {
-      ctx.fillStyle = 'rgba(0,0,0,0.8)';
+      ctx.fillStyle = 'rgba(0,0,0,0.75)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = '#ff0055';
       ctx.font = '20px Courier New';
@@ -332,6 +346,7 @@
     requestAnimationFrame(loop);
   }
 
+  // Controlli Tastiera
   window.addEventListener('keydown', e => {
     if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = true;
     if (e.key === 'ArrowRight' || e.key === 'd') keys.right = true;
@@ -346,6 +361,7 @@
     if (e.key === 'ArrowRight' || e.key === 'd') keys.right = false;
   });
 
+  // Controlli Touch
   const bindTouch = (id, onPress, onRelease) => {
     const el = document.getElementById(id);
     el.addEventListener('touchstart', e => { e.preventDefault(); onPress(); });
